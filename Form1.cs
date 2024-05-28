@@ -2,6 +2,7 @@
 using System.IO;
 using System.Windows.Forms;
 using System.Xml;
+using System.Data.SqlClient;
 namespace WindowsFormsC_
 {
     public partial class Form1 : Form
@@ -10,8 +11,122 @@ namespace WindowsFormsC_
         public Form1()
         {
             InitializeComponent();
+            CheckAndCreateTable();
         }
+        private void CheckAndCreateTable()
+        {
+            string connectionString = "Server=DESKTOP-HQFVC8H\\MSSQLSERVER2022;Database=myDataBase;User Id=sa;Password=SQL2024";
 
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    string checkTableQuery = @"
+                        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
+                        CREATE TABLE Users (
+                            Id INT PRIMARY KEY IDENTITY,
+                            Username NVARCHAR(50) NOT NULL,
+                            Password NVARCHAR(50) NOT NULL
+                        );
+
+                       IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Warehouses')
+            CREATE TABLE Warehouses (
+                WarehouseId INT PRIMARY KEY IDENTITY,
+                WarehouseName NVARCHAR(100) NOT NULL,
+                Location NVARCHAR(100) NOT NULL
+            );
+
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Products')
+            CREATE TABLE Products (
+                ProductId INT PRIMARY KEY IDENTITY,
+                ProductName NVARCHAR(100) NOT NULL,
+                SupplierId INT,
+                FOREIGN KEY (SupplierId) REFERENCES Suppliers(SupplierId)
+            );
+
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Suppliers')
+            CREATE TABLE Suppliers (
+                SupplierId INT PRIMARY KEY IDENTITY,
+                SupplierName NVARCHAR(100) NOT NULL,
+                ContactName NVARCHAR(100),
+                ContactEmail NVARCHAR(100)
+            );
+
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Customers')
+            CREATE TABLE Customers (
+                CustomerId INT PRIMARY KEY IDENTITY,
+                CustomerName NVARCHAR(100) NOT NULL,
+                ContactName NVARCHAR(100),
+                ContactEmail NVARCHAR(100)
+            );
+
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Orders')
+            CREATE TABLE Orders (
+                OrderId INT PRIMARY KEY IDENTITY,
+                CustomerId INT,
+                OrderDate DATETIME NOT NULL,
+                FOREIGN KEY (CustomerId) REFERENCES Customers(CustomerId)
+            );
+
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'OrderDetails')
+            CREATE TABLE OrderDetails (
+                OrderDetailId INT PRIMARY KEY IDENTITY,
+                OrderId INT,
+                ProductId INT,
+                Quantity INT NOT NULL,
+                FOREIGN KEY (OrderId) REFERENCES Orders(OrderId),
+                FOREIGN KEY (ProductId) REFERENCES Products(ProductId)
+            );
+
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Shipments')
+            CREATE TABLE Shipments (
+                ShipmentId INT PRIMARY KEY IDENTITY,
+                ShipmentDate DATETIME NOT NULL,
+                EmployeeId INT,
+                FOREIGN KEY (EmployeeId) REFERENCES Employees(EmployeeId)
+            );
+
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ShipmentDetails')
+            CREATE TABLE ShipmentDetails (
+                ShipmentDetailId INT PRIMARY KEY IDENTITY,
+                ShipmentId INT,
+                ProductId INT,
+                Quantity INT NOT NULL,
+                FOREIGN KEY (ShipmentId) REFERENCES Shipments(ShipmentId),
+                FOREIGN KEY (ProductId) REFERENCES Products(ProductId)
+            );
+
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Inventory')
+            CREATE TABLE Inventory (
+                InventoryId INT PRIMARY KEY IDENTITY,
+                ProductId INT,
+                WarehouseId INT,
+                Quantity INT NOT NULL,
+                FOREIGN KEY (ProductId) REFERENCES Products(ProductId),
+                FOREIGN KEY (WarehouseId) REFERENCES Warehouses(WarehouseId)
+            );
+
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Employees')
+            CREATE TABLE Employees (
+                EmployeeId INT PRIMARY KEY IDENTITY,
+                EmployeeName NVARCHAR(100) NOT NULL,
+                Position NVARCHAR(100),
+                HireDate DATETIME
+            );
+        ";
+                    using (SqlCommand command = new SqlCommand(checkTableQuery, connection))
+                    {
+                        command.ExecuteNonQuery();
+                        MessageBox.Show("Таблица Users проверена или создана успешно.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Ошибка при подключении к базе данных: " + ex.Message);
+                }
+            }
+        }
         private void ButtonOk_Click(object sender, EventArgs e)
         {
             this.DialogResult = DialogResult.OK;
@@ -19,124 +134,88 @@ namespace WindowsFormsC_
 
         private void Button1_Click(object sender, EventArgs e)
         {
-            string defaultPath = "C:\\Users\\V.Kudinov\\source\\repos\\WindowsFormsC#\\bin\\Debug\\";
-            string fileName = Path.Combine(defaultPath, "users.xml"); //используется для объединения пути к файлу
-
-            // Загрузка файла только если fileName не пусто
-            if (File.Exists(fileName))
+            string login = textBoxLogin.Text;
+            string password = textBoxPassword.Text;
+            bool userFound = false;
+            using (SqlConnection connection = new SqlConnection(connectionString))
             {
-                // Файл  найден по пути по умолчанию
-                XmlDocument doc = new XmlDocument();
-                doc.Load(fileName);
-                XmlNodeList nodes = doc.SelectNodes("users/user"); // пример выбора всех узлов 
-
-                string login = textBoxLogin.Text;
-                string password = textBoxPassword.Text;
-                bool userFound = false;
-
-                foreach (XmlNode node in nodes)
+                try
                 {
-                    string Nodelogin = node.SelectSingleNode("username").InnerText; // получение значения атрибута "name"
-                    string Nodepassword = node.SelectSingleNode("password").InnerText;
-
-                    if (login == Nodelogin && password == Nodepassword)
+                    connection.Open();
+                    string query = "SELECT COUNT(*) FROM Users WHERE Username = @Username AND Password = @Password";
+                    using (SqlCommand command = new SqlCommand(query, connection))
                     {
-                        userFound = true;
-                        break;
+                        command.Parameters.AddWithValue("@Username", login);
+                        command.Parameters.AddWithValue("@Password", password);
+
+                        int count = (int)command.ExecuteScalar();
+                        userFound = count > 0;
                     }
 
-                }
-                if (userFound)
-                {
-                    try
+                    if (userFound)
                     {
-                        Form2 form2 = new Form2();
-                        form2.Show();
-                        this.Hide();
+                        try
+                        {
+                            Form2 form2 = new Form2();
+                            form2.Show();
+                            this.Hide();
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show("Произошла ошибка: " + ex.Message);
+                        }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        MessageBox.Show("Произошла ошибка: " + ex.Message);
+                        MessageBox.Show("Не верный пользователь или пароль");
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    MessageBox.Show("Не верный пользователь или пароль");
+                    MessageBox.Show("Произошла ошибка: " + ex.Message);
                 }
             }
         }
         private void Button2_Click(object sender, EventArgs e)
         {
+            string login = textBoxLogin.Text;
+            string password = textBoxPassword.Text;
 
-            string fileName;
-            try
+            using (SqlConnection connection = new SqlConnection(connectionString))
             {
-                fileName = "C:\\Users\\V.Kudinov\\source\\repos\\WindowsFormsC#\\bin\\Debug\\users.xml";//Определяем имя файла, в который будут записываться данные.
-                if (File.Exists(fileName)) // Проверяем существование файла
+                try
                 {
-                    XmlDocument doc = new XmlDocument();//Создаем объект XmlDocument
-                    doc.Load(fileName);//загружаем содержимое файла в память
-                    XmlNode root = doc.DocumentElement;//Получаем корневой элемент XML-документа
+                    connection.Open();
 
-                    // Проверяем, есть ли уже в файле запись с таким логином (текст из текстового поля textBoxLogin). 
-                    XmlNode existingUser = root.SelectSingleNode($"user[username='{textBoxLogin.Text}']");
-                    if (existingUser != null)//Если такая запись уже есть выводим сообщение об ошибке и завершаем выполнение метода.
+                    // Проверяем, существует ли пользователь с таким логином
+                    string checkUserQuery = "SELECT COUNT(*) FROM Users WHERE Username = @Username";
+                    using (SqlCommand checkCommand = new SqlCommand(checkUserQuery, connection))
                     {
-                        MessageBox.Show("Такой пользователь уже существует");
-                        return;
-                    }
-                    else
-                    {
-                        MessageBox.Show("Пользователь создан");
-                    }
-                    XmlNode userNode = doc.CreateElement("user");//Создаем новый элемент XML-документа с тегом "user"
+                        checkCommand.Parameters.AddWithValue("@Username", login);
+                        int userCount = (int)checkCommand.ExecuteScalar();
 
-                    XmlNode usernameNode = doc.CreateElement("username");// Создаем новый элемент "username" и записываем в него логин пользователя
-                    usernameNode.InnerText = textBoxLogin.Text;//Значения этих элементов берутся из соответствующих текстовых полей textBoxLogin
-
-                    XmlNode passwordNode = doc.CreateElement("password");//Создаем новый элемент "password" и записываем в него пароль пользователя
-                    passwordNode.InnerText = textBoxPassword.Text;//Значения этих элементов берутся из соответствующих текстовых полей textBoxPassword 
-
-                    userNode.AppendChild(usernameNode);// Добавляем элементы "username" в фаил(элемент) "user"
-                    userNode.AppendChild(passwordNode);// Добавляем элементы "password" в фаил(элемент) "user"
-
-                    root.AppendChild(userNode);//Добавляем новый элемент "user" в корневой элемент XML-документа
-
-                    doc.Save(fileName);//сохраняем изменения в файл
-                }
-                else
-                {
-                    DialogResult result = MessageBox.Show("Файл users.xml не найден. Создать файл?", "Создание файла", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                    if (result == DialogResult.Yes)
-                    {
-                        SaveFileDialog saveFileDialog = new SaveFileDialog();
-                        saveFileDialog.Filter = "XML files (*.xml)|*.xml|All files (*.*)|*.*";
-                        saveFileDialog.FileName = "users";
-
-                        fileName = saveFileDialog.FileName + ".xml";
-                        XmlDocument doc = new XmlDocument();
-                        XmlDeclaration xmlDeclaration = doc.CreateXmlDeclaration("1.0", "UTF-8", null);
-                        doc.AppendChild(xmlDeclaration);
-                        XmlNode root = doc.CreateElement("users");
-                        doc.AppendChild(root);
-                        doc.Save(fileName);
-                        MessageBox.Show("Файл users.xml успешно создан");
-
-                        if (result == DialogResult.Yes)
+                        if (userCount > 0)
                         {
-                            OpenFileDialog openFileDialog = new OpenFileDialog();
-                            openFileDialog.Filter = "XML files (*.xml)|*.xml";
+                            MessageBox.Show("Такой пользователь уже существует");
+                        }
+                        else
+                        {
+                            // Добавляем нового пользователя
+                            string insertQuery = "INSERT INTO Users (Username, Password) VALUES (@Username, @Password)";
+                            using (SqlCommand insertCommand = new SqlCommand(insertQuery, connection))
+                            {
+                                insertCommand.Parameters.AddWithValue("@Username", login);
+                                insertCommand.Parameters.AddWithValue("@Password", password);
+                                insertCommand.ExecuteNonQuery();
+                                MessageBox.Show("Пользователь создан");
+                            }
                         }
                     }
-                    else
-                    {
-                        MessageBox.Show("Приложение продолжит работу без создания файла");
-                    }
                 }
-            }
-            catch (FileNotFoundException ex)
-            {
-                MessageBox.Show("Произошла ошибка: " + ex.Message);
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Произошла ошибка: " + ex.Message);
+                }
             }
         }
     }

@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Windows.Forms;
 using System.Xml;
+using System.Data.SqlClient;
 
 namespace WindowsFormsC_
 {
